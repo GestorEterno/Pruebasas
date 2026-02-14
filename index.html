@@ -10,30 +10,30 @@
     <script src="https://d3js.org/d3.v7.min.js"></script>
 </head>
 <body>
-    <!-- Fondos galácticos (copiados de tecnología) -->
+    <!-- FONDO GALÁCTICO (igual que tecnología) -->
     <div class="galaxy-background"></div>
     <div class="starfield"></div>
     <div class="nebula-overlay"></div>
     <div class="particles"></div>
     
-    <!-- Barra de progreso (opcional, misma estética) -->
+    <!-- BARRA DE PROGRESO (opcional, misma estética) -->
     <div class="reading-progress"></div>
     
-    <!-- Cabecera con menú (idéntica a tecnología) -->
+    <!-- CABECERA CON MENÚ (idéntica a tecnología) -->
     <header class="cyber-header">
         <div class="logo-container">
             <h1 class="logo-glitch" data-text="VISION OLYMPUS">VISION OLYMPUS</h1>
         </div>
         <nav class="cyber-nav">
             <a href="index.html" class="nav-link">INICIO</a>
-            <a href="estructura.html" class="nav-link active">ESTRUCTURA</a> <!-- Activo -->
+            <a href="estructura.html" class="nav-link active">ESTRUCTURA</a>
             <a href="filosofia.html" class="nav-link">FILOSOFÍA</a>
             <a href="comunidad.html" class="nav-link">COMUNIDAD</a>
             <a href="unete.html" class="nav-link">ÚNETE</a>
         </nav>
     </header>
 
-    <!-- Panel lateral izquierdo (sin cambios funcionales) -->
+    <!-- PANEL LATERAL IZQUIERDO (sin cambios funcionales) -->
     <div class="sidebar collapsed" id="sidebar">
         <div class="sidebar-header">
             <div class="logo">
@@ -88,8 +88,8 @@
         </div>
         <div id="graphContainer" class="graph-container">
             <svg id="galaxySvg"></svg>
-            <!-- Círculo orbital animado centrado en el núcleo -->
-            <div class="hero-orbit">
+            <!-- CÍRCULO ORBITAL (se posicionará sobre el núcleo) -->
+            <div class="hero-orbit" id="orbitCircle">
                 <div class="orbit-ring ring-1"></div>
                 <div class="orbit-ring ring-2"></div>
                 <div class="orbit-ring ring-3"></div>
@@ -100,7 +100,7 @@
     
     <div id="nodeTooltip" class="node-tooltip"></div>
     
-    <!-- Footer idéntico al de tecnología -->
+    <!-- FOOTER (idéntico a tecnología) -->
     <footer class="tech-footer">
         <div class="footer-container">
             <div class="footer-content">
