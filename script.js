@@ -859,7 +859,6 @@ function fitZoomToContent() {
     const cx = (minX + maxX)/2, cy = (minY + maxY)/2;
     const transform = d3.zoomIdentity.translate(CONFIG.width/2, CONFIG.height/2).scale(scale).translate(-cx, -cy);
     svg.transition().duration(600).call(zoomBehavior.transform, transform);
-    // updateOrbitPosition se llamará en el evento de zoom
 }
 
 function getDescendantNodes(node) {
@@ -1213,7 +1212,7 @@ function updateOrbitPosition() {
     const transformed = transform.apply(point);
     const container = document.getElementById('graphContainer');
     const rect = container.getBoundingClientRect();
-    const orbit = document.querySelector('.hero-orbit');
+    const orbit = document.getElementById('orbitCircle');
     if (orbit) {
         orbit.style.left = (rect.left + transformed.x) + 'px';
         orbit.style.top = (rect.top + transformed.y) + 'px';
