@@ -989,7 +989,7 @@ body.immersion-mode .sidebar:not(.collapsed) ~ .sidebar-collapse-btn {
     font-size: 0.7rem;
 }
 
-/* Ajustes responsivos para el footer */
+/* Ajustes responsivos paras el footer */
 @media (max-width: 768px) {
     .footer-content {
         flex-direction: column;
