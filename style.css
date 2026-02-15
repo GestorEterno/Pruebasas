@@ -387,8 +387,7 @@ body.immersion-mode .sidebar-collapse-btn,
 body.immersion-mode .sidebar-toggle-btn,
 body.immersion-mode .sidebar.collapsed ~ .sidebar-toggle-btn,
 body.immersion-mode .sidebar:not(.collapsed) ~ .sidebar-collapse-btn,
-body.immersion-mode .cyber-header,
-body.immersion-mode .tech-footer {
+body.immersion-mode .cyber-header {
     display: none !important;
 }
 .immersion-mode .immersion-btn {
@@ -528,7 +527,7 @@ body.immersion-mode .tech-footer {
 }
 
 /* =========================================== */
-/* NUEVOS ESTILOS PARA INTEGRACIÓN CON HEADER/FOOTER */
+/* NUEVOS ESTILOS PARA INTEGRACIÓN CON HEADER */
 /* =========================================== */
 
 .cyber-header {
@@ -539,15 +538,6 @@ body.immersion-mode .tech-footer {
     background: rgba(10, 10, 26, 0.95);
     backdrop-filter: blur(10px);
     border-bottom: 1px solid rgba(0, 243, 255, 0.2);
-}
-
-.tech-footer {
-    flex-shrink: 0;
-    position: relative;
-    width: 100%;
-    z-index: 1000;
-    background: var(--dark-matter);
-    border-top: 1px solid rgba(0, 243, 255, 0.2);
 }
 
 /* OVERLAY ORBITAL */
