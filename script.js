@@ -1,6 +1,5 @@
 // ============================================================
 // OLYMPUS · GALAXIA CORPORATIVA - ESTRUCTURA EXACTA (MODIFICADA)
-// CON INTEGRACIÓN DE PARTÍCULAS Y OVERLAY ORBITAL
 // ============================================================
 
 // ==================== CONFIGURACIÓN GLOBAL ====================
@@ -385,14 +384,137 @@ function assignEmployeeCounts(node) {
 OLYMPUS_STRUCTURE.nucleo.companias = OLYMPUS_STRUCTURE.companias;
 assignEmployeeCounts(OLYMPUS_STRUCTURE.nucleo);
 
-// ==================== FUNCIONES AUXILIARES (sin cambios significativos) ====================
-function formatDisplayName(rawName, type) { /* ... (igual que antes) ... */ }
-function measureText(text, fontSize, weight) { /* ... */ }
-function calculateOptimalSize(node) { /* ... */ }
-function rectanglesOverlap(a, b, margin) { /* ... */ }
-function computeOrbitRadius(parent, children, baseRadius, siblingMargin) { /* ... */ }
-function computeBoundingRadii(node, type) { /* ... */ }
-function placeNodeChildren(parent, children) { /* ... */ }
+// ==================== FUNCIONES AUXILIARES ====================
+function formatDisplayName(rawName, type) {
+    if (type === 'nucleo') return 'OLYMPUS';
+    if (type === 'departamento' && rawName.length > 25) {
+        const mid = Math.floor(rawName.length / 2);
+        let splitPos = rawName.indexOf(' ', mid);
+        if (splitPos === -1) splitPos = mid;
+        return rawName.substring(0, splitPos) + '\n' + rawName.substring(splitPos + 1);
+    }
+    const words = rawName.split(' ');
+    const MAX_LENGTH = 10, processed = [];
+    words.forEach(word => {
+        if (word.length > MAX_LENGTH) {
+            const mid = Math.ceil(word.length / 2);
+            processed.push(word.slice(0, mid) + '-');
+            processed.push(word.slice(mid));
+        } else processed.push(word);
+    });
+    if (processed.length <= 2) return processed.join('\n');
+    return processed.slice(0, 2).join(' ') + '\n' + processed.slice(2).join(' ');
+}
+
+function measureText(text, fontSize, weight = '600') {
+    const tempSvg = d3.select('body').append('svg')
+        .attr('width',0).attr('height',0)
+        .style('position','absolute').style('visibility','hidden');
+    const tempText = tempSvg.append('text')
+        .attr('font-family','Inter, sans-serif')
+        .attr('font-weight',weight)
+        .attr('font-size',fontSize+'px')
+        .text(text);
+    const bbox = tempText.node().getBBox();
+    tempSvg.remove();
+    return { width: bbox.width, height: bbox.height };
+}
+
+function calculateOptimalSize(node) {
+    const base = CONFIG.sizes[node.type];
+    let fontSize = { nucleo:20, compania:16, empresa:14, subEmpresa:12, departamento:11 }[node.type];
+    if (!node.displayName) node.displayName = formatDisplayName(node.name, node.type);
+    const lineHeight = fontSize * 1.2;
+    const lines = node.displayName.split('\n');
+    let maxWidth = 0;
+    lines.forEach(line => {
+        const m = measureText(line, fontSize, node.type==='nucleo'?'700':'600');
+        maxWidth = Math.max(maxWidth, m.width);
+    });
+    return {
+        width: Math.max(base.widthBase, maxWidth + base.padding*2),
+        height: Math.max(base.heightBase, lines.length * lineHeight + base.padding*2),
+        fontSize
+    };
+}
+
+function computeOrbitRadius(parent, children, baseRadius, siblingMargin) {
+    if (children.length === 0) return 0;
+    const N = children.length;
+    let radius = baseRadius;
+    let placed = false;
+    let iter = 0;
+    while (!placed && iter++ < 200) {
+        placed = true;
+        const positions = [];
+        for (let i = 0; i < N; i++) positions.push({ angle: (2 * Math.PI * i) / N });
+        for (let i = 0; i < N && placed; i++) {
+            for (let j = i+1; j < N; j++) {
+                const angleDiff = Math.abs(positions[i].angle - positions[j].angle);
+                const chordLength = 2 * radius * Math.sin(Math.min(angleDiff, 2*Math.PI - angleDiff) / 2);
+                const minDist = children[i].boundingRadius + children[j].boundingRadius + siblingMargin;
+                if (chordLength < minDist) { placed = false; break; }
+            }
+        }
+        if (!placed) radius += 20;
+    }
+    return radius;
+}
+
+function computeBoundingRadii(node, type) {
+    if (type === 'departamento') {
+        node.selfRadius = Math.hypot(node.size.width, node.size.height) / 2;
+        node.boundingRadius = node.selfRadius;
+        node.orbitRadius = 0;
+        return;
+    }
+
+    let children = [];
+    if (type === 'subEmpresa' && node.departamentos) children = node.departamentos;
+    else if (type === 'empresa') {
+        if (node.subEmpresas) children.push(...node.subEmpresas);
+        if (node.departamentos) children.push(...node.departamentos);
+    }
+    else if (type === 'compania' && node.empresas) children = node.empresas;
+    else if (type === 'nucleo' && node.companias) children = node.companias;
+
+    children.forEach(child => {
+        if (type === 'subEmpresa') computeBoundingRadii(child, 'departamento');
+        else if (type === 'empresa') computeBoundingRadii(child, child.type);
+        else if (type === 'compania') computeBoundingRadii(child, 'empresa');
+        else if (type === 'nucleo') computeBoundingRadii(child, 'compania');
+    });
+
+    node.selfRadius = Math.hypot(node.size.width, node.size.height) / 2;
+
+    let baseRadius = 0;
+    if (type === 'subEmpresa') baseRadius = CONFIG.orbit.distanceSubEmpresaToDepartamento;
+    else if (type === 'empresa') {
+        baseRadius = (node.subEmpresas && node.subEmpresas.length > 0) ? CONFIG.orbit.distanceEmpresaToSubEmpresa : CONFIG.orbit.distanceEmpresaToDepartamento;
+    }
+    else if (type === 'compania') baseRadius = CONFIG.orbit.distanceCompaniaToEmpresa;
+    else if (type === 'nucleo') baseRadius = CONFIG.orbit.distanceNucleoToCompania;
+
+    node.orbitRadius = children.length > 0 ? computeOrbitRadius(node, children, baseRadius, CONFIG.orbit.siblingMargin) : 0;
+
+    let maxChildBounding = 0;
+    children.forEach(child => { maxChildBounding = Math.max(maxChildBounding, child.boundingRadius); });
+    node.boundingRadius = Math.max(node.selfRadius, node.orbitRadius + maxChildBounding);
+}
+
+function placeNodeChildren(parent, children) {
+    if (!children || children.length === 0) return;
+    const N = children.length;
+    let angleOffset = (N === 2 || N === 4) ? Math.PI / 4 : 0;
+    for (let i = 0; i < N; i++) {
+        const angle = angleOffset + (2 * Math.PI * i) / N;
+        const child = children[i];
+        child.x = parent.x + parent.orbitRadius * Math.cos(angle);
+        child.y = parent.y + parent.orbitRadius * Math.sin(angle);
+        DATA.nodes.push(child);
+        DATA.links.push({ source: parent, target: child });
+    }
+}
 
 function placeAllNodes() {
     const nucleo = OLYMPUS_STRUCTURE.nucleo;
@@ -427,10 +549,7 @@ function placeAllNodes() {
         DATA.links.push({ source: nucleo, target: compania });
     });
 
-    companias.forEach(compania => {
-        placeNodeChildren(compania, compania.empresas);
-    });
-
+    companias.forEach(compania => placeNodeChildren(compania, compania.empresas));
     companias.forEach(compania => {
         compania.empresas.forEach(empresa => {
             const hijos = [];
@@ -439,13 +558,10 @@ function placeAllNodes() {
             placeNodeChildren(empresa, hijos);
         });
     });
-
     companias.forEach(compania => {
         compania.empresas.forEach(empresa => {
             if (empresa.subEmpresas) {
-                empresa.subEmpresas.forEach(subEmpresa => {
-                    placeNodeChildren(subEmpresa, subEmpresa.departamentos);
-                });
+                empresa.subEmpresas.forEach(subEmpresa => placeNodeChildren(subEmpresa, subEmpresa.departamentos));
             }
         });
     });
@@ -453,7 +569,7 @@ function placeAllNodes() {
 
 function agregarEnlacesServicio() {
     const serviceLinks = [
-        { source: 'helios-ai', target: 'olympus-mindset', desc: 'Modelos de IA para personalización, recomendación y optimización en las aplicaciones de Olympus Mindset.' }
+        { source: 'helios-ai', target: 'olympus-mindset', desc: 'Modelos de IA para personalización, recomendación y optimización en las aplicaciones de Olympus Mindset (Empyria, Noema, Vitalion, Ecomyse).' }
     ];
     serviceLinks.forEach(sl => {
         const sourceNode = DATA.nodes.find(n => n.id === sl.source);
@@ -488,10 +604,11 @@ function initSVG() {
 }
 
 function createGalaxy() {
+    console.log('🌌 Construyendo OLYMPUS...');
+
     function assignGroupAndStripe(node, groupId) {
         node.groupId = groupId;
-        if (node.type === 'nucleo' || node.type === 'compania') node.stripeColor = node.color;
-        else node.stripeColor = CONFIG.typeColors[node.type] || '#aaaaaa';
+        node.stripeColor = (node.type === 'nucleo' || node.type === 'compania') ? node.color : (CONFIG.typeColors[node.type] || '#aaaaaa');
         if (node.empresas) node.empresas.forEach(e => assignGroupAndStripe(e, groupId));
         if (node.subEmpresas) node.subEmpresas.forEach(s => assignGroupAndStripe(s, groupId));
         if (node.departamentos) node.departamentos.forEach(d => assignGroupAndStripe(d, groupId));
@@ -515,13 +632,52 @@ function createGalaxy() {
     DATA.links = [];
     placeAllNodes();
     agregarEnlacesServicio();
+
+    console.log(`✅ Nodos: ${DATA.nodes.length}, Enlaces: ${DATA.links.length}`);
 }
 
 // ==================== FILTROS Y JERARQUÍA ====================
-function createGroupFilters() { /* ... igual que antes ... */ }
-function initGroupVisibility() { /* ... */ }
-function bindGroupFilters() { /* ... */ }
-function buildHierarchyMenu() { /* ... */ }
+function createGroupFilters() {
+    const container = document.getElementById('groupFilters');
+    container.innerHTML = '';
+    OLYMPUS_STRUCTURE.companias.forEach(c => {
+        container.innerHTML += `<div class="group-filter-item"><input type="checkbox" id="chk_${c.id}" checked><span class="group-color-dot" style="background:${c.color};"></span><label for="chk_${c.id}">${c.name}</label></div>`;
+    });
+}
+
+function initGroupVisibility() {
+    OLYMPUS_STRUCTURE.companias.forEach(c => DATA.groupVisibility[c.id] = true);
+}
+
+function bindGroupFilters() {
+    OLYMPUS_STRUCTURE.companias.forEach(c => {
+        const chk = document.getElementById(`chk_${c.id}`);
+        if (chk) chk.addEventListener('change', function() {
+            DATA.groupVisibility[c.id] = this.checked;
+            render();
+            fitZoomToContent();
+        });
+    });
+}
+
+function buildHierarchyMenu() {
+    const container = document.getElementById('hierarchyContainer');
+    if (!container) return;
+    let html = '<div class="hierarchy-item active" data-group="all"><i class="fas fa-globe-americas"></i><span>Toda la Galaxia</span></div>';
+    html += '<div class="hierarchy-item" data-group="nucleo"><i class="fas fa-sun"></i><span>Núcleo: OLYMPUS</span></div>';
+    OLYMPUS_STRUCTURE.companias.forEach(c => {
+        html += `<div class="hierarchy-item" data-group="${c.id}"><i class="fas fa-building"></i><span>${c.name}</span></div>`;
+    });
+    container.innerHTML = html;
+
+    document.querySelectorAll('#hierarchyContainer .hierarchy-item').forEach(item => {
+        item.addEventListener('click', function() {
+            document.querySelectorAll('#hierarchyContainer .hierarchy-item').forEach(i => i.classList.remove('active'));
+            this.classList.add('active');
+            navigateToGroup(this.getAttribute('data-group'));
+        });
+    });
+}
 
 // ==================== RENDERIZADO ====================
 function render() {
@@ -549,7 +705,7 @@ function render() {
         .on('mouseover', function(event, d) {
             if (d.type === 'service') {
                 const tooltip = document.getElementById('nodeTooltip');
-                tooltip.innerHTML = `<strong style="color:#ffaa44;">🔗 CONEXIÓN DE SERVICIO</strong><br><span>${d.source.name} → ${d.target.name}</span><br>${d.description}`;
+                tooltip.innerHTML = `<strong style="color:#ffaa44;">🔗 CONEXIÓN DE SERVICIO</strong><br><span style="color:#ffffff;">${d.source.name}</span> → <span style="color:#ffffff;">${d.target.name}</span><br><span style="color:#e6e9f0;">${d.description || 'Relación estratégica interna.'}</span>`;
                 tooltip.style.display = 'block';
                 tooltip.style.left = (event.clientX + 20) + 'px';
                 tooltip.style.top = (event.clientY - 40) + 'px';
@@ -566,9 +722,9 @@ function render() {
         .attr('data-type', d => d.type)
         .attr('transform', d => `translate(${d.x}, ${d.y})`)
         .style('cursor', 'pointer')
-        .on('click', (e, d) => { e.stopPropagation(); handleNodeClick(d); })
-        .on('mouseover', (e, d) => handleNodeMouseOver(d, e))
-        .on('mouseout', (e, d) => handleNodeMouseOut(d));
+        .on('click', function(e, d) { e.stopPropagation(); handleNodeClick(d); })
+        .on('mouseover', function(e, d) { handleNodeMouseOver(d, e); })
+        .on('mouseout', function(e, d) { handleNodeMouseOut(d); });
 
     nodes.each(function(d) {
         const group = d3.select(this);
@@ -595,50 +751,7 @@ function render() {
     updateOrbitOverlay();
 }
 
-// ==================== FUNCIONES DE INTERACCIÓN ====================
-function handleNodeMouseOver(node, event) {
-    d3.select(`#node-${node.id} .node-rect`).attr('stroke','#fff').attr('stroke-width',2.5);
-    d3.selectAll('.link').filter(d => d.source.id === node.id || d.target.id === node.id)
-        .attr('stroke', d => d.type === 'service' ? '#ffdd44' : '#fff')
-        .attr('stroke-width', 3)
-        .attr('opacity', 1);
-    
-    const tooltip = document.getElementById('nodeTooltip');
-    let tipo = { nucleo:'🏛️ Corporación', compania:'🏢 Compañía', empresa:'📌 Empresa', subEmpresa:'🔹 Sub‑empresa', departamento:'📋 Departamento' }[node.type] || '';
-    let html = `<strong>${node.name}</strong><br>${tipo}<br>${node.desc || node.description || ''}`;
-    if (node.mision) html += `<br><span style="color:#aaccff;">⚡ ${node.mision}</span>`;
-    html += `<br>👥 Total empleados: ${node.totalEmployees?.toLocaleString() || 0}`;
-    tooltip.innerHTML = html;
-    tooltip.style.display = 'block';
-    tooltip.style.left = (event.clientX + 20) + 'px';
-    tooltip.style.top = (event.clientY - 40) + 'px';
-}
-
-function handleNodeMouseOut(node) {
-    d3.select(`#node-${node.id} .node-rect`).attr('stroke','#2a3a5c').attr('stroke-width',1.5);
-    d3.selectAll('.link').attr('stroke', d => d.type === 'service' ? '#ffaa44' : '#6a9eff')
-        .attr('stroke-width', d => d.type === 'service' ? 2.2 : 1.8)
-        .attr('opacity', 0.85);
-    document.getElementById('nodeTooltip').style.display = 'none';
-}
-
-function handleNodeClick(node) {
-    document.getElementById('nodeTooltip').style.display = 'none';
-    selectNode(node);
-    if ((node.empresas && node.empresas.length) || (node.subEmpresas && node.subEmpresas.length) || (node.departamentos && node.departamentos.length) || (node.companias && node.companias.length)) {
-        fitToNodeGroup(node);
-    } else {
-        centerOnNode(node, 2);
-    }
-}
-
-function selectNode(node) {
-    if (DATA.selectedNode) d3.select(`#node-${DATA.selectedNode.id} .node-rect`).attr('stroke','#2a3a5c').attr('stroke-width',1.5);
-    DATA.selectedNode = node;
-    d3.select(`#node-${node.id} .node-rect`).attr('stroke','#fff').attr('stroke-width',2.5);
-}
-
-// ==================== ZOOM Y NAVEGACIÓN ====================
+// ==================== ZOOM Y EVENTOS ====================
 function fitZoomToContent() {
     const svg = d3.select('#galaxySvg');
     const visibleNodes = DATA.nodes.filter(n => n.type === 'nucleo' || DATA.groupVisibility[n.groupId] === true);
@@ -671,7 +784,7 @@ function getDescendantNodes(node) {
 
 function fitToNodeGroup(node) {
     const groupNodes = getDescendantNodes(node).filter(n => n.type === 'nucleo' || DATA.groupVisibility[n.groupId] === true);
-    if (!groupNodes.length) return;
+    if (groupNodes.length === 0) return;
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
     groupNodes.forEach(n => {
         const hw = n.size.width/2, hh = n.size.height/2;
@@ -689,16 +802,59 @@ function fitToNodeGroup(node) {
     d3.select('#galaxySvg').transition().duration(600).call(zoomBehavior.transform, transform);
 }
 
-function centerOnNucleo() { const n = DATA.nodes.find(n => n.id === 'nucleo'); if(n) centerOnNode(n, 1.2); }
-function centerOnNode(node, scale = 2) {
-    const svg = d3.select('#galaxySvg');
-    const transform = d3.zoomIdentity.translate(CONFIG.width/2, CONFIG.height/2).scale(scale).translate(-node.x, -node.y);
-    svg.transition().duration(600).call(zoomBehavior.transform, transform);
+function handleNodeMouseOver(node, event) {
+    d3.select(`#node-${node.id} .node-rect`).attr('stroke','#fff').attr('stroke-width',2.5);
+    d3.selectAll('.link').filter(d => d.source.id === node.id || d.target.id === node.id)
+        .attr('stroke', d => d.type === 'service' ? '#ffdd44' : '#fff')
+        .attr('stroke-width', 3)
+        .attr('opacity', 1);
+    
+    const tooltip = document.getElementById('nodeTooltip');
+    let tipo = { nucleo:'🏛️ Corporación', compania:'🏢 Compañía', empresa:'📌 Empresa', subEmpresa:'🔹 Sub‑empresa', departamento:'📋 Departamento' }[node.type] || '';
+    let descripcion = node.desc || node.description || 'Sin descripción';
+    let misionHtml = node.mision ? `<br><span style="color:#aaccff; font-weight:600;">⚡ Misión:</span> ${node.mision}` : '';
+    let empleadosHtml = `<br><span style="color:#b0b8c9;">👥 Total empleados: ${node.totalEmployees?.toLocaleString() || 0}</span>`;
+    let extraInfo = '';
+    if (node.type === 'compania') extraInfo = `<br><span style="color:#b0b8c9;">📊 ${node.empresas?.length || 0} empresas bajo su mando</span>`;
+    else if (node.type === 'empresa') extraInfo = `<br><span style="color:#b0b8c9;">🔗 ${node.subEmpresas?.length || 0} divisiones · 📋 ${node.departamentos?.length || 0} departamentos directos</span>`;
+    else if (node.type === 'subEmpresa') extraInfo = `<br><span style="color:#b0b8c9;">🧩 ${node.departamentos?.length || 0} departamentos especializados</span>`;
+    
+    let html = `<strong style="font-size:1.1em;">${node.name}</strong><br>${tipo}<br><span style="color:#e6e9f0;">${descripcion}</span>${misionHtml}${empleadosHtml}${extraInfo}`;
+    if (node.departamentos && node.departamentos.length) {
+        html += '<br><span style="color:#aaccff; font-weight:600;">📂 Departamentos:</span><ul>';
+        node.departamentos.slice(0,6).forEach(d => html += `<li>${d.name} (${d.employees} emp.)</li>`);
+        if (node.departamentos.length > 6) html += `<li>y ${node.departamentos.length-6} más...</li>`;
+        html += '</ul>';
+    }
+    tooltip.innerHTML = html;
+    tooltip.style.display = 'block';
+    tooltip.style.left = (event.clientX + 20) + 'px';
+    tooltip.style.top = (event.clientY - 40) + 'px';
 }
 
-// ==================== EVENTOS Y SETUP ====================
+function handleNodeMouseOut(node) {
+    d3.select(`#node-${node.id} .node-rect`).attr('stroke','#2a3a5c').attr('stroke-width',1.5);
+    d3.selectAll('.link').attr('stroke', d => d.type === 'service' ? '#ffaa44' : '#6a9eff')
+        .attr('stroke-width', d => d.type === 'service' ? 2.2 : 1.8)
+        .attr('opacity', 0.85);
+    document.getElementById('nodeTooltip').style.display = 'none';
+}
+
+function handleNodeClick(node) {
+    document.getElementById('nodeTooltip').style.display = 'none';
+    if (DATA.selectedNode) d3.select(`#node-${DATA.selectedNode.id} .node-rect`).attr('stroke','#2a3a5c').attr('stroke-width',1.5);
+    DATA.selectedNode = node;
+    d3.select(`#node-${node.id} .node-rect`).attr('stroke','#fff').attr('stroke-width',2.5);
+    if ((node.empresas && node.empresas.length) || (node.subEmpresas && node.subEmpresas.length) || (node.departamentos && node.departamentos.length) || (node.companias && node.companias.length)) {
+        fitToNodeGroup(node);
+    } else {
+        centerOnNode(node, 2);
+    }
+}
+
 let searchDebounceTimer;
 function setupEvents() {
+    console.log('⚙️ Configurando eventos...');
     const toggleSidebar = () => {
         document.querySelector('.sidebar').classList.toggle('collapsed');
         setTimeout(handleResize, 300);
@@ -710,9 +866,9 @@ function setupEvents() {
     setTimeout(bindGroupFilters, 50);
 
     const searchInput = document.getElementById('searchInput');
-    searchInput.addEventListener('input', function() {
+    searchInput.addEventListener('input', () => {
         clearTimeout(searchDebounceTimer);
-        searchDebounceTimer = setTimeout(performSearch, 150);
+        searchDebounceTimer = setTimeout(() => performSearch(), 150);
     });
     document.getElementById('searchBtn')?.addEventListener('click', performSearch);
     
@@ -752,9 +908,7 @@ function performSearch() {
     const query = document.getElementById('searchInput').value.toLowerCase().trim();
     const resultsContainer = document.getElementById('searchResults');
     if (!query) { resultsContainer.classList.remove('active'); return; }
-    const results = DATA.nodes.filter(n => 
-        (n.name?.toLowerCase().includes(query) || n.description?.toLowerCase().includes(query) || n.mision?.toLowerCase().includes(query) || n.desc?.toLowerCase().includes(query))
-    );
+    const results = DATA.nodes.filter(n => n.name?.toLowerCase().includes(query) || n.description?.toLowerCase().includes(query) || n.mision?.toLowerCase().includes(query) || n.desc?.toLowerCase().includes(query));
     resultsContainer.innerHTML = '';
     if (results.length) {
         results.forEach(n => {
@@ -781,6 +935,13 @@ function performSearch() {
     }
 }
 
+function centerOnNucleo() { const n = DATA.nodes.find(n => n.id === 'nucleo'); if(n) centerOnNode(n, 1.2); }
+function centerOnNode(node, scale = 2) {
+    const svg = d3.select('#galaxySvg');
+    const transform = d3.zoomIdentity.translate(CONFIG.width/2, CONFIG.height/2).scale(scale).translate(-node.x, -node.y);
+    svg.transition().duration(600).call(zoomBehavior.transform, transform);
+}
+
 function handleResize() {
     updateDimensions();
     d3.select('#galaxySvg').attr('width', CONFIG.width).attr('height', CONFIG.height);
@@ -794,8 +955,7 @@ function updateStats() {
     document.getElementById('nodeCount').textContent = DATA.nodes.length;
     document.getElementById('linkCount').textContent = DATA.links.length;
     document.getElementById('companyCount').textContent = DATA.nodes.filter(n => n.type === 'compania').length;
-    const totalEmpresas = DATA.nodes.filter(n => n.type === 'empresa' || n.type === 'subEmpresa').length;
-    document.getElementById('empresaTotalCount').textContent = totalEmpresas;
+    document.getElementById('empresaTotalCount').textContent = DATA.nodes.filter(n => n.type === 'empresa' || n.type === 'subEmpresa').length;
     document.getElementById('departmentCount').textContent = DATA.nodes.filter(n => n.type === 'departamento').length;
     const nucleo = DATA.nodes.find(n => n.id === 'nucleo');
     document.getElementById('totalEmployees').textContent = nucleo?.totalEmployees?.toLocaleString() || '0';
@@ -815,82 +975,61 @@ function createImmersionButton() {
     });
 }
 
-// ==================== OVERLAY ORBITAL ====================
+// ==================== FUNCIÓN PARA ACTUALIZAR EL OVERLAY ORBITAL ====================
 function updateOrbitOverlay() {
     if (!orbitOverlay) return;
     const nucleo = DATA.nodes.find(n => n.id === 'nucleo');
     if (!nucleo) return;
     
-    // Obtener la transformación actual del SVG
     const transform = currentTransform || d3.zoomIdentity;
-    
-    // Coordenadas del núcleo en el espacio del SVG
     const pt = { x: nucleo.x, y: nucleo.y };
-    // Aplicar la transformación para obtener coordenadas de pantalla
     const transformed = transform.apply(pt);
     
-    // El overlay está dentro de .graph-container, que tiene posición relativa.
-    // Necesitamos las coordenadas relativas al contenedor.
-    const containerRect = document.querySelector('.graph-container').getBoundingClientRect();
-    const leftRelative = transformed.x - containerRect.left;
-    const topRelative = transformed.y - containerRect.top;
+    // Tamaño fijo grande: 120vmin (ya definido en CSS)
+    // Pero necesitamos obtener el tamaño real en píxeles del overlay
+    // Podemos leer el ancho del overlay después de que se renderice
+    const overlayWidth = orbitOverlay.offsetWidth;
+    const overlayHeight = orbitOverlay.offsetHeight;
     
-    // Tamaño del overlay (en píxeles, basado en vmin)
-    const vmin = Math.min(window.innerWidth, window.innerHeight) / 100;
-    const overlayWidth = 120 * vmin;
-    const overlayHeight = 120 * vmin;
-    
-    // Calcular posición para que el centro del overlay coincida con el punto transformado
-    const left = leftRelative - overlayWidth / 2;
-    const top = topRelative - overlayHeight / 2;
-    
-    // Aplicar
-    orbitOverlay.style.left = left + 'px';
-    orbitOverlay.style.top = top + 'px';
-    orbitOverlay.style.width = overlayWidth + 'px';
-    orbitOverlay.style.height = overlayHeight + 'px';
-    // La escala no se aplica porque el overlay ya tiene tamaño fijo en vmin, pero podemos ajustar si queremos que sea relativo al zoom.
-    // Para mantener el tamaño visual constante (como en tecnologia.html), no aplicamos scale.
+    orbitOverlay.style.left = (transformed.x - overlayWidth/2) + 'px';
+    orbitOverlay.style.top = (transformed.y - overlayHeight/2) + 'px';
+    orbitOverlay.style.transform = `scale(${transform.k})`;
 }
 
-// ==================== PARTÍCULAS (copiado de tecnologia.js) ====================
+// ==================== PARTÍCULAS (desde tecnologia.js) ====================
 function createStellarField() {
     const particlesContainer = document.querySelector('.particles');
     if (!particlesContainer) return;
     for (let i = 0; i < 60; i++) {
-        createStar(particlesContainer, i);
+        const star = document.createElement('div');
+        star.classList.add('particle');
+        const posX = Math.random() * 100;
+        const posY = Math.random() * 100;
+        const size = Math.random() * 2 + 0.5;
+        const duration = Math.random() * 40 + 30;
+        const delay = Math.random() * 10;
+        star.style.left = `${posX}%`;
+        star.style.top = `${posY}%`;
+        star.style.width = `${size}px`;
+        star.style.height = `${size}px`;
+        star.style.animationDuration = `${duration}s`;
+        star.style.animationDelay = `${delay}s`;
+        const starTypes = [
+            { color: '#ffffff', glow: '#ffffff' },
+            { color: '#00f3ff', glow: '#00f3ff' },
+            { color: '#ff00ff', glow: '#ff00ff' }
+        ];
+        const starType = starTypes[Math.floor(Math.random() * starTypes.length)];
+        star.style.backgroundColor = starType.color;
+        star.style.boxShadow = `0 0 ${size * 2}px ${starType.glow}`;
+        particlesContainer.appendChild(star);
     }
 }
 
-function createStar(container, index) {
-    const star = document.createElement('div');
-    star.classList.add('particle');
-    const posX = Math.random() * 100;
-    const posY = Math.random() * 100;
-    const size = Math.random() * 2 + 0.5;
-    const duration = Math.random() * 40 + 30;
-    const delay = Math.random() * 10;
-    star.style.left = `${posX}%`;
-    star.style.top = `${posY}%`;
-    star.style.width = `${size}px`;
-    star.style.height = `${size}px`;
-    star.style.animationDuration = `${duration}s`;
-    star.style.animationDelay = `${delay}s`;
-    const starTypes = [
-        { color: '#ffffff', glow: '#ffffff' },
-        { color: '#00f3ff', glow: '#00f3ff' },
-        { color: '#ff00ff', glow: '#ff00ff' }
-    ];
-    const starType = starTypes[Math.floor(Math.random() * starTypes.length)];
-    star.style.backgroundColor = starType.color;
-    star.style.boxShadow = `0 0 ${size * 2}px ${starType.glow}`;
-    container.appendChild(star);
-}
-
-// ==================== INICIO ====================
+// ==================== ARRANQUE ====================
 document.addEventListener('DOMContentLoaded', () => {
     orbitOverlay = document.getElementById('orbitOverlay');
-    createStellarField(); // Crear partículas
+    createStellarField(); // Generar partículas
     
     setTimeout(() => {
         try {
@@ -904,7 +1043,7 @@ document.addEventListener('DOMContentLoaded', () => {
             updateStats();
             createImmersionButton();
             fitZoomToContent();
-            console.log('🚀 OLYMPUS – Integración completa con partículas y overlay orbital.');
+            console.log('🚀 OLYMPUS listo.');
         } catch(e) {
             console.error('❌ Error fatal:', e);
             document.getElementById('graphContainer').innerHTML = `<div style="color:#ff6b6b; padding:20px; text-align:center;"><h3>Error al cargar la galaxia</h3><p>${e.message}</p><button onclick="location.reload()" style="padding:10px 20px; background:#6a9eff; color:white; border:none; border-radius:4px; margin-top:10px; cursor:pointer;">Reintentar</button></div>`;
