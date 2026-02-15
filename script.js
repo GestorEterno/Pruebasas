@@ -4,7 +4,12 @@
 // ✅ 5 compañías con la jerarquía especificada
 // ✅ Empresas pueden tener departamentos directos y sub‑empresas
 // ✅ Colores únicos por nivel (empresa, subEmpresa, departamento)
-// ✅ Empleados asignados según reglas
+// ✅ Empleados: 
+//    - Avalon (Creators y Studios): 20–40 por departamento (excepto dos específicos)
+//    - Atención al Cliente (Avalon Creators): 4
+//    - Legal (Avalon Creators): 2
+//    - Olympus Culture y Olympus Strategy: 3–8 por departamento
+//    - Resto de departamentos: 0 empleados
 // ✅ Solo un enlace de servicio: Helios AI → Olympus Mindset
 // ✅ Tercera sub‑empresa en Avalon Studios: AVALON ANIMATION
 // ✅ CELESTIAL GAMES con 3 sub‑empresas (3D, 2D, VR/4D)
@@ -363,26 +368,34 @@ OLYMPUS_STRUCTURE.companias.push({
     ]
 });
 
-// ==================== ASIGNACIÓN DE EMPLEADOS ====================
+// ==================== ASIGNACIÓN DE EMPLEADOS (UNA SOLA VEZ) ====================
+// Conjunto con los IDs de los departamentos de Avalon Studios y Avalon Creators (20-40 empleados)
 const AVALON_SPECIAL_DEPARTMENTS = new Set([
+    // Avalon Creators
     'avalon-creators-edicion',
     'avalon-creators-legal',
     'avalon-creators-atencion',
+    // Avalon Series
     'series-edicion',
     'series-creativo',
     'series-produccion',
+    // Avalon Movies
     'movies-edicion',
     'movies-creativo',
     'movies-produccion',
+    // Avalon Animation
     'animation-2d',
     'animation-3d',
     'animation-art'
 ]);
 
+// Conjunto con los IDs de los departamentos de Olympus Strategy y Olympus Culture (3-8 empleados)
 const SMALL_DEPARTMENTS = new Set([
+    // Olympus Culture
     'culture-valores',
     'culture-experiencia',
     'culture-rangos',
+    // Olympus Strategy
     'strategy-global',
     'strategy-innovacion',
     'strategy-alianzas'
@@ -390,16 +403,17 @@ const SMALL_DEPARTMENTS = new Set([
 
 function assignEmployeeCounts(node) {
     if (node.type === 'departamento') {
+        // Casos especiales con valores fijos
         if (node.id === 'avalon-creators-atencion') {
             node.employees = 4;
         } else if (node.id === 'avalon-creators-legal') {
             node.employees = 2;
         } else if (AVALON_SPECIAL_DEPARTMENTS.has(node.id)) {
-            node.employees = Math.floor(Math.random() * 21) + 20;
+            node.employees = Math.floor(Math.random() * 21) + 20; // 20..40
         } else if (SMALL_DEPARTMENTS.has(node.id)) {
-            node.employees = Math.floor(Math.random() * 6) + 3;
+            node.employees = Math.floor(Math.random() * 6) + 3;   // 3..8
         } else {
-            node.employees = 0;
+            node.employees = 0;   // Todos los demás departamentos tienen 0 empleados
         }
         node.totalEmployees = node.employees;
         return node.totalEmployees;
@@ -420,10 +434,11 @@ function assignEmployeeCounts(node) {
     return sum;
 }
 
+// Enlazar compañías al núcleo y asignar empleados de forma permanente
 OLYMPUS_STRUCTURE.nucleo.companias = OLYMPUS_STRUCTURE.companias;
 assignEmployeeCounts(OLYMPUS_STRUCTURE.nucleo);
 
-// ==================== FUNCIONES AUXILIARES (sin cambios) ====================
+// ==================== FUNCIONES AUXILIARES ====================
 function formatDisplayName(rawName, type) {
     if (type === 'nucleo') return 'OLYMPUS';
     if (type === 'departamento' && rawName.length > 25) {
@@ -634,7 +649,7 @@ function placeAllNodes() {
     });
 }
 
-// ==================== ENLACES DE SERVICIO ====================
+// ==================== ENLACES DE SERVICIO (SOLO UNO) ====================
 function agregarEnlacesServicio() {
     const serviceLinks = [
         { 
@@ -658,8 +673,9 @@ function agregarEnlacesServicio() {
     });
 }
 
-// ==================== VARIABLES GLOBALES D3 ====================
+// ==================== VARIABLES GLOBALES Y FUNCIONES D3 ====================
 let zoomBehavior, currentTransform = d3.zoomIdentity, immersionMode = false;
+let orbitOverlay = null; // NUEVO: referencia al overlay orbital
 
 function updateDimensions() {
     const container = document.getElementById('graphContainer');
@@ -675,7 +691,7 @@ function initSVG() {
         .on('zoom', (event) => {
             currentTransform = event.transform;
             svg.select('g').attr('transform', currentTransform);
-            updateOrbitPosition(); // Actualizar círculo orbital
+            updateOrbitOverlay(); // NUEVO
         });
     svg.call(zoomBehavior).append('g');
 }
@@ -771,7 +787,7 @@ function render() {
         visibleNodeIds.has(l.source.id || l.source) && visibleNodeIds.has(l.target.id || l.target)
     );
 
-    g.selectAll('.link')
+    const linkGroup = g.selectAll('.link')
         .data(visibleLinks)
         .enter()
         .append('line')
@@ -836,7 +852,7 @@ function render() {
         });
     });
     updateStats();
-    updateOrbitPosition(); // Actualizar posición del círculo después del render
+    updateOrbitOverlay(); // NUEVO: actualizar posición del overlay
 }
 
 // ==================== ZOOM Y EVENTOS ====================
@@ -861,6 +877,7 @@ function fitZoomToContent() {
     svg.transition().duration(600).call(zoomBehavior.transform, transform);
 }
 
+// Nueva función: obtiene todos los nodos descendientes (incluido él mismo) a partir de la estructura
 function getDescendantNodes(node) {
     let nodes = [node];
     if (node.empresas) {
@@ -879,7 +896,9 @@ function getDescendantNodes(node) {
 }
 
 function fitToNodeGroup(node) {
+    // Recolectar todos los nodos del grupo (él y sus descendientes)
     const groupNodes = getDescendantNodes(node);
+    // Filtrar los que están en DATA.nodes (todos deberían estarlo) y además visibles según filtros
     const visibleGroupNodes = groupNodes.filter(n => 
         n.type === 'nucleo' || DATA.groupVisibility[n.groupId] === true
     );
@@ -893,7 +912,7 @@ function fitToNodeGroup(node) {
         minY = Math.min(minY, n.y - hh);
         maxY = Math.max(maxY, n.y + hh);
     });
-    const padding = 80;
+    const padding = 80; // padding adicional alrededor del grupo
     const width = maxX - minX + padding*2;
     const height = maxY - minY + padding*2;
     const scale = Math.min(CONFIG.width / width, CONFIG.height / height) * 0.9;
@@ -968,12 +987,14 @@ function handleNodeMouseOut(node) {
 function handleNodeClick(node) {
     document.getElementById('nodeTooltip').style.display = 'none';
     selectNode(node);
+    // Si el nodo tiene hijos (empresas, subempresas o departamentos), mostramos el panorama completo.
     if ((node.empresas && node.empresas.length) || 
         (node.subEmpresas && node.subEmpresas.length) || 
         (node.departamentos && node.departamentos.length) ||
         (node.companias && node.companias.length)) {
         fitToNodeGroup(node);
     } else {
+        // Para nodos hoja (departamentos), centramos con zoom
         centerOnNode(node, 2);
     }
 }
@@ -1031,6 +1052,7 @@ function navigateToGroup(groupId) {
                 if(chk) chk.checked = true;
                 render();
             }
+            // En lugar de centerOnNode, mostramos panorama si tiene hijos
             if ((node.empresas && node.empresas.length) || 
                 (node.subEmpresas && node.subEmpresas.length) || 
                 (node.departamentos && node.departamentos.length)) {
@@ -1064,6 +1086,7 @@ function performSearch() {
             let icon = { nucleo:'sun', compania:'globe-americas', empresa:'sitemap', subEmpresa:'briefcase', departamento:'users' }[n.type] || 'building';
             div.innerHTML = `<i class="fas fa-${icon}"></i> ${n.name}`;
             div.addEventListener('click', () => {
+                // Al hacer clic en resultado, aplicar misma lógica de panorama
                 if ((n.empresas && n.empresas.length) || 
                     (n.subEmpresas && n.subEmpresas.length) || 
                     (n.departamentos && n.departamentos.length)) {
@@ -1097,6 +1120,7 @@ function handleResize() {
     createGalaxy();
     render();
     fitZoomToContent();
+    updateOrbitOverlay(); // NUEVO
 }
 
 function updateStats() {
@@ -1124,103 +1148,42 @@ function createImmersionButton() {
     });
 }
 
-// ==================== FUNCIONES DE ESTÉTICA (desde tecnologia.js) ====================
-function initProgressBar() {
-    const progressBar = document.querySelector('.reading-progress');
-    function updateProgress() {
-        const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
-        const scrollHeight = document.documentElement.scrollHeight - window.innerHeight;
-        const progress = (scrollTop / scrollHeight) * 100;
-        progressBar.style.width = `${progress}%`;
-    }
-    window.addEventListener('scroll', updateProgress);
-}
-
-function createStellarField() {
-    const particlesContainer = document.querySelector('.particles');
-    for (let i = 0; i < 60; i++) {
-        const star = document.createElement('div');
-        star.classList.add('particle');
-        const posX = Math.random() * 100;
-        const posY = Math.random() * 100;
-        const size = Math.random() * 2 + 0.5;
-        const duration = Math.random() * 40 + 30;
-        const delay = Math.random() * 10;
-        star.style.left = `${posX}%`;
-        star.style.top = `${posY}%`;
-        star.style.width = `${size}px`;
-        star.style.height = `${size}px`;
-        star.style.animationDuration = `${duration}s`;
-        star.style.animationDelay = `${delay}s`;
-        star.style.backgroundColor = '#ffffff';
-        star.style.boxShadow = `0 0 ${size * 2}px #ffffff`;
-        particlesContainer.appendChild(star);
-    }
-}
-
-function initOrbitalAnimation() {
-    const orbitContainer = document.querySelector('.hero-orbit');
-    for (let i = 0; i < 12; i++) {
-        const particle = document.createElement('div');
-        particle.classList.add('orbital-particle');
-        const angle = (i / 12) * Math.PI * 2;
-        const distance = 20 + Math.random() * 20;
-        const size = Math.random() * 1.5 + 0.5;
-        const duration = 15 + Math.random() * 10;
-        const delay = Math.random() * 5;
-        particle.style.width = `${size}px`;
-        particle.style.height = `${size}px`;
-        particle.style.background = '#00f3ff';
-        particle.style.boxShadow = `0 0 ${size * 2}px #00f3ff`;
-        particle.style.borderRadius = '50%';
-        particle.style.position = 'absolute';
-        particle.style.top = '50%';
-        particle.style.left = '50%';
-        particle.style.opacity = '0';
-        setTimeout(() => {
-            particle.style.opacity = '1';
-            particle.style.transition = 'opacity 1s ease';
-        }, 1000 + (i * 100));
-        const keyframes = `
-            @keyframes orbital-particle-${i} {
-                0% { transform: translate(-50%, -50%) rotate(${angle}rad) translate(${distance}vmin) rotate(-${angle}rad); }
-                100% { transform: translate(-50%, -50%) rotate(${angle + Math.PI * 2}rad) translate(${distance}vmin) rotate(-${angle + Math.PI * 2}rad); }
-            }
-        `;
-        const style = document.createElement('style');
-        style.textContent = keyframes;
-        document.head.appendChild(style);
-        particle.style.animation = `orbital-particle-${i} ${duration}s linear infinite`;
-        particle.style.animationDelay = `${delay}s`;
-        orbitContainer.appendChild(particle);
-    }
-    const rings = document.querySelectorAll('.orbit-ring');
-    rings.forEach((ring, index) => {
-        setTimeout(() => {
-            ring.style.opacity = '1';
-        }, 500 + (index * 300));
-    });
-}
-
-// ==================== CÍRCULO ORBITAL DINÁMICO ====================
-function updateOrbitPosition() {
+// ==================== NUEVA FUNCIÓN: ACTUALIZAR POSICIÓN DEL OVERLAY ORBITAL ====================
+function updateOrbitOverlay() {
+    if (!orbitOverlay) return;
+    
+    // Buscar el nodo núcleo
     const nucleo = DATA.nodes.find(n => n.id === 'nucleo');
     if (!nucleo) return;
-    const svg = document.getElementById('galaxySvg');
-    const transform = d3.zoomTransform(svg);
-    const point = { x: nucleo.x, y: nucleo.y };
-    const transformed = transform.apply(point);
-    const container = document.getElementById('graphContainer');
-    const rect = container.getBoundingClientRect();
-    const orbit = document.getElementById('orbitCircle');
-    if (orbit) {
-        orbit.style.left = (rect.left + transformed.x) + 'px';
-        orbit.style.top = (rect.top + transformed.y) + 'px';
-    }
+    
+    // Calcular el tamaño base del overlay en píxeles (basado en vmin actual)
+    const vmin = Math.min(window.innerWidth, window.innerHeight) / 100;
+    const baseWidth = 80 * vmin;
+    const baseHeight = 80 * vmin;
+    
+    // Obtener la transformación actual del SVG
+    const transform = currentTransform || d3.zoomIdentity;
+    
+    // Coordenadas del núcleo en el espacio del SVG
+    const pt = { x: nucleo.x, y: nucleo.y };
+    // Aplicar la transformación para obtener coordenadas de pantalla
+    const transformed = transform.apply(pt);
+    
+    // Calcular left y top para que el centro del overlay coincida con el punto transformado
+    const left = transformed.x - baseWidth / 2;
+    const top = transformed.y - baseHeight / 2;
+    
+    // Aplicar la posición y escala
+    orbitOverlay.style.left = left + 'px';
+    orbitOverlay.style.top = top + 'px';
+    orbitOverlay.style.transform = `scale(${transform.k})`;
 }
 
 // ==================== ARRANQUE ====================
 document.addEventListener('DOMContentLoaded', () => {
+    // Obtener referencia al overlay
+    orbitOverlay = document.getElementById('orbitOverlay');
+    
     setTimeout(() => {
         try {
             updateDimensions();
@@ -1233,13 +1196,7 @@ document.addEventListener('DOMContentLoaded', () => {
             updateStats();
             createImmersionButton();
             fitZoomToContent();
-            
-            // Inicializar elementos estéticos de tecnología
-            createStellarField();
-            initProgressBar();
-            initOrbitalAnimation();
-            
-            console.log('🚀 OLYMPUS – Estructura modificada con estética de tecnología.');
+            console.log('🚀 OLYMPUS – Estructura modificada: CELESTIAL GAMES con 3 sub‑empresas, empleados de Avalon (20-40, con excepciones) y pequeños departamentos (3-8) en Strategy/Culture.');
         } catch(e) {
             console.error('❌ Error fatal:', e);
             document.getElementById('graphContainer').innerHTML = `<div style="color:#ff6b6b; padding:20px; text-align:center;"><h3>Error al cargar la galaxia</h3><p>${e.message}</p><button onclick="location.reload()" style="padding:10px 20px; background:#6a9eff; color:white; border:none; border-radius:4px; margin-top:10px; cursor:pointer;">Reintentar</button></div>`;
