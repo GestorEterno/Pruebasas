@@ -11,7 +11,13 @@
     <script src="https://d3js.org/d3.v7.min.js"></script>
 </head>
 <body>
-    <!-- HEADER (exactamente como en tecnologia.html) -->
+    <!-- Fondo galáctico (copiado de tecnologia.html) -->
+    <div class="galaxy-background"></div>
+    <div class="starfield"></div>
+    <div class="nebula-overlay"></div>
+    <div class="particles"></div>
+
+    <!-- HEADER exacto de tecnologia.html -->
     <header class="cyber-header">
         <div class="logo-container">
             <h1 class="logo-glitch" data-text="VISION OLYMPUS">VISION OLYMPUS</h1>
@@ -26,9 +32,9 @@
         </nav>
     </header>
 
-    <!-- LAYOUT PRINCIPAL (gráfico + panel lateral) -->
+    <!-- LAYOUT PRINCIPAL -->
     <div class="main-layout">
-        <!-- PANEL LATERAL IZQUIERDO (original sin cambios) -->
+        <!-- SIDEBAR (sin cambios) -->
         <div class="sidebar collapsed" id="sidebar">
             <div class="sidebar-header">
                 <div class="logo">
@@ -38,9 +44,7 @@
             <div class="sidebar-content">
                 <div class="sidebar-section">
                     <h3><i class="fas fa-sitemap"></i> Sistema Corporativo</h3>
-                    <div id="hierarchyContainer" class="hierarchy">
-                        <!-- Se genera dinámicamente desde script.js -->
-                    </div>
+                    <div id="hierarchyContainer" class="hierarchy"></div>
                 </div>
                 <div class="sidebar-section">
                     <h3><i class="fas fa-eye"></i> Compañías visibles</h3>
@@ -73,7 +77,7 @@
         <button class="sidebar-collapse-btn" id="sidebarCollapseBtn" title="Ocultar panel"><i class="fas fa-chevron-left"></i></button>
         <button class="sidebar-toggle-btn" id="sidebarToggleBtn" title="Mostrar panel"><i class="fas fa-chevron-right"></i></button>
 
-        <!-- CONTENEDOR DEL GRÁFICO (con overlay orbital) -->
+        <!-- GRÁFICO CON OVERLAY ORBITAL -->
         <div class="graph-container" id="graphContainer">
             <div class="floating-controls">
                 <button class="nav-btn" id="centerBtn" title="Centrar en núcleo"><i class="fas fa-sun"></i></button>
@@ -83,7 +87,7 @@
                 <button class="nav-btn" id="resetViewBtn" title="Vista completa"><i class="fas fa-expand"></i></button>
             </div>
             <svg id="galaxySvg"></svg>
-            <!-- OVERLAY ORBITAL (centrado en el núcleo OLYMPUS) -->
+            <!-- OVERLAY ORBITAL ENORME -->
             <div id="orbitOverlay" class="orbit-overlay">
                 <div class="orbit-ring ring-1"></div>
                 <div class="orbit-ring ring-2"></div>
