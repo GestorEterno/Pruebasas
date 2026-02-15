@@ -4,10 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>OLYMPUS · Galaxia Corporativa</title>
+    <!-- Estilos -->
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="tecnologia.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Orbitron:wght@400;500;700;900&family=Exo+2:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- D3.js -->
     <script src="https://d3js.org/d3.v7.min.js"></script>
 </head>
 <body>
@@ -17,7 +19,7 @@
     <div class="nebula-overlay"></div>
     <div class="particles"></div>
 
-    <!-- HEADER exacto de tecnologia.html -->
+    <!-- HEADER (exactamente como en tecnologia.html) -->
     <header class="cyber-header">
         <div class="logo-container">
             <h1 class="logo-glitch" data-text="VISION OLYMPUS">VISION OLYMPUS</h1>
@@ -32,9 +34,9 @@
         </nav>
     </header>
 
-    <!-- LAYOUT PRINCIPAL -->
+    <!-- LAYOUT PRINCIPAL (gráfico + panel lateral) -->
     <div class="main-layout">
-        <!-- SIDEBAR (sin cambios) -->
+        <!-- PANEL LATERAL IZQUIERDO -->
         <div class="sidebar collapsed" id="sidebar">
             <div class="sidebar-header">
                 <div class="logo">
@@ -77,7 +79,7 @@
         <button class="sidebar-collapse-btn" id="sidebarCollapseBtn" title="Ocultar panel"><i class="fas fa-chevron-left"></i></button>
         <button class="sidebar-toggle-btn" id="sidebarToggleBtn" title="Mostrar panel"><i class="fas fa-chevron-right"></i></button>
 
-        <!-- GRÁFICO CON OVERLAY ORBITAL -->
+        <!-- CONTENEDOR DEL GRÁFICO (con overlay orbital) -->
         <div class="graph-container" id="graphContainer">
             <div class="floating-controls">
                 <button class="nav-btn" id="centerBtn" title="Centrar en núcleo"><i class="fas fa-sun"></i></button>
@@ -87,7 +89,7 @@
                 <button class="nav-btn" id="resetViewBtn" title="Vista completa"><i class="fas fa-expand"></i></button>
             </div>
             <svg id="galaxySvg"></svg>
-            <!-- OVERLAY ORBITAL ENORME -->
+            <!-- OVERLAY ORBITAL MEGA ENORME (120vmin) -->
             <div id="orbitOverlay" class="orbit-overlay">
                 <div class="orbit-ring ring-1"></div>
                 <div class="orbit-ring ring-2"></div>
